@@ -259,35 +259,42 @@ INNER JOIN address a ON cli.address_id = a.id;
 
 ### **Theory Recap**
 
-The Analogy:  
-Standard GROUP BY is like taking a whole class and saying "The average height is 5'8"." You lose the individuals.  
-A Window Function is like walking down the line of students and saying "You are the 1st tallest, you are the 2nd tallest..." while they all remain standing in line.
+The Analogy:
+A standard GROUP BY is like asking, “What is the average height of this class?” and only writing down one line: “Class average height is 1.73 m.” You no longer see any individual students.
+
+A window function is like keeping every student in the list, but adding extra notes beside each one, such as “class average height is 1.73 m” or “you are the 2nd tallest in your class,” while all the original student rows stay visible.
 
 ### **Workshop**
 
-### Window functions
+#### Window functions
 
-Window functions are used to compute aggregates over a group of rows, called a window. They are useful when you want to compute aggregates over a group of rows, but you don't want to group the rows into a single output row. For example, you can use window functions to compute the running total of a column. You can also use window functions to compute the rank of a row. Window functions are also called analytical functions.
+**Window functions** let you look at a row *together with* other rows in the same “window” (for example, all claims for the same car, ordered by date), while still keeping every original row in the result.  
+Instead of collapsing rows like `GROUP BY` does, a window function adds extra calculated columns on top of the detail table. In this lesson, we use them to:
+
+- calculate a **running total** of `claim_amt` over time, and  
+- assign a **rank** to each claim within a car (e.g., largest claim per `car_id`).  
+  These are sometimes called **analytic** functions because they help you analyse patterns (totals, rankings, averages) without losing row-level detail.
 
 #### Running total
 
-A running total is the sum of values in a column, where the sum is accumulated over time. For example, the running total of the following column:
+#### A running total is a cumulative sum: each row shows the sum of all rows from the start (of the table or group) up to that row, in a defined order. 
 
-```
-1
-2
-3
-4
-```
+Core idea with numbers
 
-is:
+Imagine claim amounts for one car, ordered by claim date:
 
-```
-1
-3
-6
-10
-```
+#### 
+
+| row | claim\_amt | running\_total explanation |
+| ----: | ----: | :---- |
+| 1 | 100 | 100 (just this row) |
+| 2 | 50 | 100 \+ 50 \= 150 |
+| 3 | 200 | 100 \+ 50 \+ 200 \= 350 |
+| 4 | 25 | 100 \+ 50 \+ 200 \+ 25 \= 375 |
+
+#### 
+
+#### The running total at each row is “sum of this row and all previous rows, in order.” 
 
 You can use the `SUM` window function to compute the running total of a column. The `SUM` window function takes a column as input, and returns the sum of the column values in the current row and all previous rows.
 
@@ -313,23 +320,46 @@ FROM claim;
 
 #### Rank
 
-The `RANK` window function computes the rank of a row in an ordered window. The rank of a row is the number of rows that come before the row, plus one. For example, the rank of the following column:
+`RANK()` is a window function that gives each row a position (1st, 2nd, 3rd, …) within a group, allowing **ties** to share the same rank and leaving gaps after ties.
 
-```
-a
-b
-c
-d
+#### Core idea in one example
+
+Say you have car claims:
+
+| claim\_id | car\_id | claim\_amt |
+| ----: | ----: | ----: |
+| 1 | A | 1000 |
+| 2 | A | 800 |
+| 3 | A | 800 |
+| 4 | A | 500 |
+
+Query:
+
+```sql
+SELECT
+  claim_id,
+  car_id,
+  claim_amt,
+  RANK() OVER (
+    PARTITION BY car_id
+    ORDER BY claim_amt DESC
+  ) AS amt_rank
+FROM claim;
 ```
 
-is:
+Result:
 
-```
-1
-2
-3
-4
-```
+| claim\_id | car\_id | claim\_amt | amt\_rank |
+| ----: | ----: | ----: | ----: |
+| 1 | A | 1000 | 1 |
+| 2 | A | 800 | 2 |
+| 3 | A | 800 | 2 |
+| 4 | A | 500 | 4 |
+
+- The two 800‑amount claims tie, so both get rank 2\.  
+- Because there are two rows tied at rank 2, the next rank is 4, not 3 (there is a “gap”). 
+
+
 
 You can use the `RANK` window function to compute the rank of a row. The `RANK` window function takes a column as input, and returns the rank of the column value in the current row.
 
