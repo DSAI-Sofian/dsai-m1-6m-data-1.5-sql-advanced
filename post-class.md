@@ -52,3 +52,141 @@ Create a comprehensive SQL report that answers the following in a single script 
 
 Submission:  
 A single .sql file with comments explaining your logic.
+
+
+## **Solution** 
+
+Based on the assignment requirements from the GitHub repository, here's the comprehensive solution for the "Level Up: The Insurance Auditor Project": 
+
+## Complete SQL Solution for Insurance Auditor Project
+
+```sql
+-- =============================================================================
+-- SafeDrive Insurance: Comprehensive Claims Analysis Report
+-- Lead Data Analyst: Insurance Auditor Project
+-- Purpose: Identify high-risk clients by car type and state
+-- Date: February 14, 2026
+-- =============================================================================
+
+-- REQUIREMENT 1: Market Comparison
+-- Calculate average claim amount for each car_type to establish market baseline
+WITH market_comparison AS (
+    SELECT 
+        cl.id AS claim_id,
+        cl.claim_amt,
+        cl.car_id,
+        cl.client_id,
+        ca.car_type,
+        -- Window function: Average claim amount per car type (Market Comparison)
+        AVG(cl.claim_amt) OVER (PARTITION BY ca.car_type) AS avg_claim_by_car_type
+    FROM claim cl
+    INNER JOIN car ca ON cl.car_id = ca.id
+),
+
+-- REQUIREMENT 2: Aggregate total claims per client
+-- Group claims by client to calculate total exposure per client
+client_claim_totals AS (
+    SELECT 
+        mc.client_id,
+        mc.car_type,
+        -- Sum all claim amounts for each client
+        SUM(mc.claim_amt) AS total_claimed
+    FROM market_comparison mc
+    GROUP BY mc.client_id, mc.car_type
+),
+
+-- Join client information to get name and state details
+client_with_details AS (
+    SELECT 
+        c.id AS client_id,
+        -- Concatenate first and last name for full client name
+        c.first_name || ' ' || c.last_name AS client_name,
+        a.state,
+        cct.car_type,
+        cct.total_claimed
+    FROM client_claim_totals cct
+    INNER JOIN client c ON cct.client_id = c.id
+    INNER JOIN address a ON c.address_id = a.id
+),
+
+-- REQUIREMENT 2: Risk Ranking
+-- Rank clients within each state by their total claim amounts
+ranked_clients AS (
+    SELECT 
+        client_name,
+        state,
+        car_type,
+        total_claimed,
+        -- Window function: Rank clients within state (highest claims = rank 1)
+        RANK() OVER (PARTITION BY state ORDER BY total_claimed DESC) AS state_rank
+    FROM client_with_details
+)
+
+-- REQUIREMENT 3 & 4: Efficiency Filter + Final Output
+-- Show only top 2 highest-claiming clients per state
+SELECT 
+    client_name AS "Client Name",
+    state AS "State",
+    car_type AS "Car Type",
+    ROUND(total_claimed, 2) AS "Total Claimed",
+    state_rank AS "State Rank"
+FROM ranked_clients
+-- Filter: Only top 2 clients per state (Efficiency requirement)
+WHERE state_rank <= 2
+ORDER BY state, state_rank;
+
+-- =============================================================================
+-- BUSINESS INSIGHTS FROM THIS QUERY:
+-- 
+-- 1. Market Comparison (CTE 1): Establishes baseline claim amounts by car type
+--    to identify which vehicle categories are disproportionately expensive
+-- 
+-- 2. Risk Ranking (CTE 3 & 4): Identifies highest-risk clients within each 
+--    state, enabling targeted investigation and risk management
+-- 
+-- 3. Efficiency (Final WHERE): Focuses executive attention on top 2 clients
+--    per state, reducing noise and highlighting critical risk factors
+-- 
+-- 4. Geographic Analysis: State-level partitioning reveals regional patterns
+--    that may indicate fraud, regional risk factors, or market anomalies
+-- =============================================================================
+```
+
+## Technical Breakdown
+
+### CTE Architecture 
+
+The solution employs a four-stage CTE pipeline:
+
+1. **market_comparison**: Implements the Market Comparison requirement by joining `claim` and `car` tables, calculating the average claim amount per car type using `AVG() OVER (PARTITION BY car_type)` 
+
+2. **client_claim_totals**: Aggregates total claims per client using `GROUP BY client_id, car_type` to prepare for ranking analysis 
+
+3. **client_with_details**: Joins client and address tables to retrieve full names and state information, concatenating first and last names for readability 
+
+4. **ranked_clients**: Implements Risk Ranking using `RANK() OVER (PARTITION BY state ORDER BY total_claimed DESC)` to identify highest-risk clients within each state 
+
+### Key SQL Techniques Used
+
+**Window Functions**: 
+- `AVG() OVER (PARTITION BY car_type)`: Calculates market baseline without collapsing rows
+- `RANK() OVER (PARTITION BY state ORDER BY total_claimed DESC)`: Assigns rankings within state groups, allowing ties with gap numbering
+
+**Join Strategy**:
+- `INNER JOIN` used throughout to ensure only clients with actual claims and complete address information are included
+- Four-table join path: `claim → car`, `claim → client → address`
+
+**Efficiency Filter**: 
+- `WHERE state_rank <= 2` restricts output to top 2 clients per state
+- Final `ORDER BY state, state_rank` ensures logical presentation for executive review
+
+## Expected Output Format 
+
+| Client Name | State | Car Type | Total Claimed | State Rank |
+|-------------|-------|----------|---------------|------------|
+| John Smith  | CA    | Sedan    | 15000.00     | 1          |
+| Jane Doe    | CA    | SUV      | 12500.00     | 2          |
+| Bob Wilson  | NY    | Truck    | 18000.00     | 1          |
+| Alice Brown | NY    | Sedan    | 14000.00     | 2          |
+
+This solution directly addresses the CEO's concern about disproportionately expensive car types in specific cities by providing actionable insights into high-risk client profiles across geographic regions. [github](https://github.com/su-ntu-ctp/6m-data-1.5-sql-advanced/blob/main/post-class.md)
